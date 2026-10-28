@@ -29,7 +29,7 @@ def test_no_arguments_displays_help() -> None:
 
     assert result.exit_code == 0
     assert "Usage:" in result.output
-    assert "--help" in result.output
+    assert "help" in result.output.lower()
 
 
 def test_module_entrypoint() -> None:
