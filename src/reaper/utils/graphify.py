@@ -1,10 +1,13 @@
 """Graphify executable integration."""
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
 
 def graphify_executable() -> str:
@@ -56,12 +59,49 @@ def run_graphify_scan(scan_path: Path) -> None:
     ]
 
     try:
-        result = subprocess.run(command, check=False)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
     except OSError as error:
         typer.echo(f"Unable to run Graphify: {error}", err=True)
         raise typer.Exit(1) from error
 
     if result.returncode != 0:
+        for output in (result.stdout, result.stderr):
+            if output:
+                typer.echo(output.rstrip(), err=True)
         raise typer.Exit(result.returncode if result.returncode > 0 else 1)
 
-    typer.echo(f"Analysis written to {output_root / 'graphify-out'}")
+    graph_path = output_root / "graphify-out" / "graph.json"
+    try:
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        typer.echo("Graphify completed but graph.json was not created.", err=True)
+        raise typer.Exit(1) from error
+    except (OSError, json.JSONDecodeError) as error:
+        typer.echo(f"Unable to read Graphify output: {error}", err=True)
+        raise typer.Exit(1) from error
+
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list):
+        typer.echo("Graphify produced an invalid graph.json.", err=True)
+        raise typer.Exit(1)
+
+    nodes = graph["nodes"]
+    edges = graph.get("links", graph.get("edges"))
+    if not isinstance(edges, list) or not all(isinstance(node, dict) for node in nodes):
+        typer.echo("Graphify produced an invalid graph.json.", err=True)
+        raise typer.Exit(1)
+
+    communities = {
+        node["community"] for node in nodes if node.get("community") is not None
+    }
+    table = Table(title="Reaper <> Graphify Scan Complete")
+    table.add_column("Metric")
+    table.add_column("Count", justify="right")
+    table.add_row("Nodes", str(len(nodes)))
+    table.add_row("Edges", str(len(edges)))
+    table.add_row("Communities", str(len(communities)))
+    Console().print(table)

@@ -13,7 +13,7 @@
 [![Downloads](https://img.shields.io/github/downloads/nikhil25803/reaper/total)](https://github.com/nikhil25803/reaper/releases)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/github/license/nikhil25803/reaper)](LICENSE)
-![Graphify](https://img.shields.io/badge/Graphify-graph_analysis-6f42c1)
+[![Graphify](https://github.com/nikhil25803/reaper/actions/workflows/graphify.yml/badge.svg)](https://github.com/nikhil25803/reaper/actions/workflows/graphify.yml)
 ![llama.cpp](https://img.shields.io/badge/llama.cpp-local_AI-5c4033)
 
 ## About
@@ -24,12 +24,12 @@ code yet; interpreting those graphs and classifying findings comes later.
 
 ## Available flags
 
-| Flag        | Description                          |
-| ----------- | ------------------------------------ |
-| `--help`    | Show command help and exit.          |
-| `--version` | Show the installed version and exit. |
-| `--check graphify` | Check whether Graphify is installed. |
-| `--scan PATH` | Generate a code-only graph for a project. |
+| Flag               | Description                               |
+| ------------------ | ----------------------------------------- |
+| `--help`           | Show command help and exit.               |
+| `--version`        | Show the installed version and exit.      |
+| `--check graphify` | Check whether Graphify is installed.      |
+| `--scan PATH`      | Generate a code-only graph for a project. |
 
 ## Graphify
 
@@ -37,14 +37,28 @@ Reaper does not bundle Graphify. Install its `graphify` command separately:
 
 ```console
 uv tool install graphifyy
+```
+
+> Installs Graphify as an isolated uv tool.
+
+```console
 reaper --check graphify
+```
+
+> Confirms Graphify is available and prints its version.
+
+```console
 reaper --scan .
 ```
+
+> Scans the current project in code-only mode and writes the generated graph
+> under `reaper-analysis/graphify-out`.
 
 A scan runs locally without a graph database, API key, or LLM and writes its
 files to `<project>/reaper-analysis/graphify-out`. Code-only mode skips
 documentation, PDFs, images, and other semantic inputs. Existing analysis files
-are updated by Graphify and are not deleted by Reaper.
+are updated by Graphify and are not deleted by Reaper. Successful scans print a
+compact table containing the node, edge, and community counts.
 
 ## Development
 
