@@ -1,4 +1,10 @@
-# Reaper
+```text
+ _ __ ___  __ _ _ __   ___ _ __
+| '__/ _ \/ _` | '_ \ / _ \ '__|
+| | |  __/ (_| | |_) |  __/ |
+|_|  \___|\__,_| .__/ \___|_|
+               |_|
+```
 
 > A language-agnostic tool for dead code detection and analysis.
 
@@ -10,27 +16,35 @@
 ![Graphify](https://img.shields.io/badge/Graphify-graph_analysis-6f42c1)
 ![llama.cpp](https://img.shields.io/badge/llama.cpp-local_AI-5c4033)
 
-```text
- _ __ ___  __ _ _ __   ___ _ __
-| '__/ _ \/ _` | '_ \ / _ \ '__|
-| | |  __/ (_| | |_) |  __/ |
-|_|  \___|\__,_| .__/ \___|_|
-               |_|
-```
-
 ## About
 
-Reaper is an early-stage developer CLI for finding potentially unused and
-unreachable code. Dead-code analysis is not implemented yet; future versions
-will use dependency graphs and may use local llama.cpp models to classify
-ambiguous findings without a cloud service.
+Reaper is an early-stage developer CLI that uses an externally installed
+Graphify executable to generate local code graphs. It does not identify dead
+code yet; interpreting those graphs and classifying findings comes later.
 
 ## Available flags
 
-| Flag | Description |
-| --- | --- |
-| `--help` | Show command help and exit. |
+| Flag        | Description                          |
+| ----------- | ------------------------------------ |
+| `--help`    | Show command help and exit.          |
 | `--version` | Show the installed version and exit. |
+| `--check graphify` | Check whether Graphify is installed. |
+| `--scan PATH` | Generate a code-only graph for a project. |
+
+## Graphify
+
+Reaper does not bundle Graphify. Install its `graphify` command separately:
+
+```console
+uv tool install graphifyy
+reaper --check graphify
+reaper --scan .
+```
+
+A scan runs locally without a graph database, API key, or LLM and writes its
+files to `<project>/reaper-analysis/graphify-out`. Code-only mode skips
+documentation, PDFs, images, and other semantic inputs. Existing analysis files
+are updated by Graphify and are not deleted by Reaper.
 
 ## Development
 
@@ -38,9 +52,21 @@ Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```console
 uv sync --locked
+```
+
+```console
 uv run reaper --help
+```
+
+```console
 uv run pytest
+```
+
+```console
 uv run ruff check .
+```
+
+```console
 uv run ruff format --check .
 ```
 

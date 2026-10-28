@@ -32,6 +32,97 @@ def test_no_arguments_displays_help() -> None:
     assert "help" in result.output.lower()
 
 
+def test_check_graphify(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "reaper.utils.graphify.shutil.which", lambda _: "/usr/bin/graphify"
+    )
+    monkeypatch.setattr(
+        "reaper.utils.graphify.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout="graphify 0.9.95\n", stderr=""
+        ),
+    )
+
+    result = runner.invoke(app, ["--check", "graphify"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == "graphify 0.9.95"
+
+
+def test_check_graphify_when_missing(monkeypatch) -> None:
+    monkeypatch.setattr("reaper.utils.graphify.shutil.which", lambda _: None)
+
+    result = runner.invoke(app, ["--check", "graphify"])
+
+    assert result.exit_code == 1
+    assert "uv tool install graphifyy" in result.output
+
+
+def test_check_rejects_unknown_tool() -> None:
+    result = runner.invoke(app, ["--check", "other"])
+
+    assert result.exit_code == 2
+    assert "only graphify is supported" in result.output
+
+
+def test_scan_invokes_graphify(tmp_path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        "reaper.utils.graphify.shutil.which", lambda _: "/usr/bin/graphify"
+    )
+
+    def run(command: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("reaper.utils.graphify.subprocess.run", run)
+
+    result = runner.invoke(app, ["--scan", str(project)])
+
+    resolved_project = project.resolve()
+    assert result.exit_code == 0
+    assert commands == [
+        [
+            "/usr/bin/graphify",
+            "extract",
+            str(resolved_project),
+            "--out",
+            str(resolved_project / "reaper-analysis"),
+            "--code-only",
+        ]
+    ]
+    assert str(resolved_project / "reaper-analysis" / "graphify-out") in result.output
+
+
+def test_scan_rejects_missing_directory(tmp_path) -> None:
+    result = runner.invoke(app, ["--scan", str(tmp_path / "missing")])
+
+    assert result.exit_code == 2
+
+
+def test_scan_propagates_graphify_failure(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "reaper.utils.graphify.shutil.which", lambda _: "/usr/bin/graphify"
+    )
+    monkeypatch.setattr(
+        "reaper.utils.graphify.subprocess.run",
+        lambda command, **kwargs: subprocess.CompletedProcess(command, 7),
+    )
+
+    result = runner.invoke(app, ["--scan", str(tmp_path)])
+
+    assert result.exit_code == 7
+
+
+def test_check_and_scan_are_mutually_exclusive() -> None:
+    result = runner.invoke(app, ["--check", "graphify", "--scan", "."])
+
+    assert result.exit_code == 2
+    assert "cannot be used together" in result.output
+
+
 def test_module_entrypoint() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "reaper.main", "--version"],
