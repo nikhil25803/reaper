@@ -1,0 +1,53 @@
+name: Graphify
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+          - name: macOS
+            os: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install Reaper
+        run: uv sync --locked
+
+      - name: Build Reaper
+        run: uv build
+
+      - name: Install Graphify
+        run: uv pip install graphifyy==0.9.95
+
+      - name: Check Graphify
+        run: uv run --no-sync reaper --check graphify
+
+      - name: Scan repository
+        run: uv run --no-sync reaper --scan .
+
+      - name: Validate graph
+        run: >-
+          uv run --no-sync python -c "import json;
+          from pathlib import Path;
+          graph = json.loads(Path('reaper-analysis/graphify-out/graph.json').read_text());
+          assert graph['nodes'];
+          assert isinstance(graph['links'], list)"
