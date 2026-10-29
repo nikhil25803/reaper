@@ -46,3 +46,22 @@ jobs:
         run: |
           docker run --rm reaper --help
           docker run --rm reaper --version
+          docker run --rm reaper --check graphify
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            reaper --scan /workspace
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            reaper graph candidates /workspace --list --limit 5 --page 1
+
+      - name: Validate generated graph
+        run: >-
+          python3 -c "import json;
+          from pathlib import Path;
+          graph = json.loads(Path('reaper-analysis/graphify-out/graph.json').read_text());
+          assert graph['nodes'];
+          assert isinstance(graph.get('links'), list)"

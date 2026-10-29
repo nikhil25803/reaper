@@ -11,6 +11,7 @@ htmlcov
 build
 dist
 tests
+reaper-analysis
 .env
 .env.*
 .DS_Store
