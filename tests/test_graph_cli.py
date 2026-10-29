@@ -54,7 +54,7 @@ def test_candidates_filter_and_sort_nodes(tmp_path) -> None:
     ]
     write_graph(tmp_path, nodes, edges)
 
-    result = runner.invoke(app, ["graph", "candidates", str(tmp_path)])
+    result = runner.invoke(app, ["graph", "candidates", str(tmp_path), "--list"])
 
     assert result.exit_code == 0
     assert "Review candidates only" in result.output
@@ -67,6 +67,46 @@ def test_candidates_filter_and_sort_nodes(tmp_path) -> None:
     assert result.output.index("dead_b()") < result.output.index("dead_a()")
 
 
+def test_projects_lists_analyzed_paths(tmp_path, monkeypatch) -> None:
+    service = tmp_path / "apps" / "user-service"
+    ignored = tmp_path / "node_modules" / "dependency"
+    write_graph(tmp_path, [], [])
+    write_graph(service, [], [])
+    write_graph(ignored, [], [])
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["graph", "projects"])
+
+    assert result.exit_code == 0
+    assert "Analyzed Projects" in result.output
+    assert "user-service" in result.output
+    assert "apps/user-service" in result.output
+    assert "dependency" not in result.output
+    assert "Found 2 analyzed project(s)" in result.output
+    assert "graph candidates" in result.output
+
+
+def test_projects_handles_empty_root(tmp_path) -> None:
+    result = runner.invoke(app, ["graph", "projects", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "No analyzed projects found" in result.output
+
+
+def test_candidates_default_to_current_directory(tmp_path, monkeypatch) -> None:
+    write_graph(
+        tmp_path,
+        [callable_node("local", "local()", "src/local.py", "L1")],
+        [],
+    )
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["graph", "candidates", "--list"])
+
+    assert result.exit_code == 0
+    assert "local" in result.output
+
+
 def test_candidates_limit_and_empty_result(tmp_path) -> None:
     nodes = [
         callable_node("first", "first()", "src/a.py", "L1"),
@@ -74,11 +114,26 @@ def test_candidates_limit_and_empty_result(tmp_path) -> None:
     ]
     write_graph(tmp_path, nodes, [])
 
-    limited = runner.invoke(app, ["graph", "candidates", str(tmp_path), "--limit", "1"])
+    summary = runner.invoke(app, ["graph", "candidates", str(tmp_path)])
+    limited = runner.invoke(
+        app,
+        ["graph", "candidates", str(tmp_path), "--list", "--limit", "1"],
+    )
 
+    assert summary.exit_code == 0
+    assert "Found 2 possible dead-code candidates" in summary.output
+    assert "--list --limit 10 --page 1" in summary.output
     assert limited.exit_code == 0
     assert "first()" in limited.output
     assert "second()" not in limited.output
+    assert "Page 1/2" in limited.output
+    assert 'graph inspect "' in limited.output
+    assert '"first"' in limited.output
+    assert "--page 2" in limited.output
+    assert "appear unused.\n\n" in limited.output
+    assert "┘\n\nPage 1/2" in limited.output
+    assert "candidates\n\nInspect:" in limited.output
+    assert "\nNext:" in limited.output
 
     write_graph(
         tmp_path,
@@ -89,6 +144,84 @@ def test_candidates_limit_and_empty_result(tmp_path) -> None:
 
     assert empty.exit_code == 0
     assert "No zero-inbound callable candidates found" in empty.output
+
+
+def test_candidates_paginate_all_results(tmp_path) -> None:
+    nodes = [
+        callable_node(
+            f"node_{index:02}",
+            f"node_{index:02}()",
+            f"src/{index:02}.py",
+            "L1",
+        )
+        for index in range(21)
+    ]
+    write_graph(tmp_path, nodes, [])
+
+    middle = runner.invoke(
+        app,
+        [
+            "graph",
+            "candidates",
+            str(tmp_path),
+            "--list",
+            "--limit",
+            "10",
+            "--page",
+            "2",
+        ],
+    )
+    final = runner.invoke(
+        app,
+        [
+            "graph",
+            "candidates",
+            str(tmp_path),
+            "--list",
+            "--limit",
+            "10",
+            "--page",
+            "3",
+        ],
+    )
+
+    assert middle.exit_code == 0
+    assert "node_10" in middle.output
+    assert "node_19" in middle.output
+    assert "node_09" not in middle.output
+    assert "node_20" not in middle.output
+    assert "Page 2/3 · Showing 11-20 of 21 candidates" in middle.output
+    assert "--page 3" in middle.output
+    assert final.exit_code == 0
+    assert "node_20" in final.output
+    assert "Page 3/3 · Showing 21-21 of 21 candidates" in final.output
+    assert "Next:" not in final.output
+
+
+def test_candidates_reject_invalid_pagination(tmp_path) -> None:
+    write_graph(
+        tmp_path,
+        [callable_node("only", "only()", "src/only.py", "L1")],
+        [],
+    )
+
+    out_of_range = runner.invoke(
+        app,
+        ["graph", "candidates", str(tmp_path), "--list", "--page", "2"],
+    )
+    without_list = runner.invoke(
+        app, ["graph", "candidates", str(tmp_path), "--page", "2"]
+    )
+    invalid_limit = runner.invoke(
+        app,
+        ["graph", "candidates", str(tmp_path), "--list", "--limit", "101"],
+    )
+
+    assert out_of_range.exit_code == 2
+    assert "valid pages are 1-1" in out_of_range.output
+    assert without_list.exit_code == 2
+    assert "--page requires --list" in without_list.output
+    assert invalid_limit.exit_code == 2
 
 
 def test_inspect_node_by_id_and_label(tmp_path) -> None:

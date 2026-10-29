@@ -1,6 +1,8 @@
 """Commands for exploring a generated code graph."""
 
 import json
+import math
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -8,7 +10,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from reaper.utils.graph import candidate_nodes, graph_path, load_graph, matching_nodes
+from reaper.utils.graph import (
+    analyzed_projects,
+    candidate_nodes,
+    graph_path,
+    load_graph,
+    matching_nodes,
+)
 
 graph_app = typer.Typer(help="Explore a generated Graphify graph.")
 
@@ -27,6 +35,42 @@ def project_graph(project: Path) -> tuple[list[dict], list[dict]]:
 
 
 @graph_app.command()
+def projects(
+    root: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=False,
+            readable=True,
+            resolve_path=True,
+            metavar="ROOT",
+            help="Directory to search for analyzed projects.",
+        ),
+    ] = Path("."),
+) -> None:
+    """List project paths containing generated Reaper graphs."""
+    found = analyzed_projects(root)
+    if not found:
+        typer.echo(f"No analyzed projects found under {root}.")
+        return
+
+    table = Table(title="Analyzed Projects")
+    table.add_column("Project")
+    table.add_column("Project path", overflow="fold")
+    displayed_paths: list[str] = []
+    for project in found:
+        displayed_path = os.path.relpath(project, Path.cwd())
+        displayed_paths.append(displayed_path)
+        table.add_row(project.name, displayed_path)
+    Console().print(table)
+    typer.echo(f"Found {len(found)} analyzed project(s).")
+    typer.echo(
+        f'Next: reaper graph candidates "{displayed_paths[0]}" '
+        "--list --limit 10 --page 1"
+    )
+
+
+@graph_app.command()
 def candidates(
     project: Annotated[
         Path,
@@ -35,16 +79,21 @@ def candidates(
             file_okay=False,
             readable=True,
             resolve_path=True,
+            metavar="PROJECT_PATH",
             help="Project directory containing reaper-analysis.",
         ),
-    ],
+    ] = Path("."),
+    list_: Annotated[
+        bool, typer.Option("--list", help="Display a page of candidate details.")
+    ] = False,
     limit: Annotated[
-        int, typer.Option(min=1, help="Maximum candidates to display.")
-    ] = 20,
+        int, typer.Option(min=1, max=100, help="Candidates per page.")
+    ] = 10,
+    page: Annotated[int, typer.Option(min=1, help="One-based page number.")] = 1,
 ) -> None:
     """List callable nodes with no incoming usage connections."""
     nodes, edges = project_graph(project)
-    found = candidate_nodes(nodes, edges, limit)
+    found = candidate_nodes(nodes, edges)
     console = Console()
     console.print(
         "[yellow]Review candidates only: entry points, public APIs, decorators, "
@@ -53,20 +102,53 @@ def candidates(
     if not found:
         typer.echo("No zero-inbound callable candidates found.")
         return
+    if not list_:
+        if page != 1:
+            raise typer.BadParameter("--page requires --list", param_hint="--page")
+        typer.echo(f"Found {len(found)} possible dead-code candidates.")
+        typer.echo(
+            f'Next: reaper graph candidates "{project}" --list --limit {limit} --page 1'
+        )
+        return
 
+    total = len(found)
+    total_pages = math.ceil(total / limit)
+    if page > total_pages:
+        raise typer.BadParameter(
+            f"page {page} is out of range; valid pages are 1-{total_pages}",
+            param_hint="--page",
+        )
+    start = (page - 1) * limit
+    displayed = found[start : start + limit]
+
+    console.print()
     table = Table(title="Possible Dead-Code Candidates")
+    table.add_column("Node ID", overflow="fold")
     table.add_column("Symbol")
-    table.add_column("Source")
+    table.add_column("Source", overflow="fold")
     table.add_column("Line")
     table.add_column("Outgoing", justify="right")
-    for node, outgoing in found:
+    for node, outgoing in displayed:
         table.add_row(
+            str(node["id"]),
             str(node.get("label") or node.get("id")),
             str(node["source_file"]),
             str(node.get("source_location") or "-"),
             str(outgoing),
         )
     console.print(table)
+    typer.echo()
+    end = start + len(displayed)
+    typer.echo(
+        f"Page {page}/{total_pages} · Showing {start + 1}-{end} of {total} candidates"
+    )
+    typer.echo()
+    typer.echo(f'Inspect: reaper graph inspect "{project}" "{displayed[0][0]["id"]}"')
+    if page < total_pages:
+        typer.echo(
+            f'Next: reaper graph candidates "{project}" --list '
+            f"--limit {limit} --page {page + 1}"
+        )
 
 
 @graph_app.command()
