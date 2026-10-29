@@ -130,9 +130,13 @@ def test_candidates_limit_and_empty_result(tmp_path) -> None:
     assert 'graph inspect "' in limited.output
     assert '"first"' in limited.output
     assert "--page 2" in limited.output
-    assert "appear unused.\n\n" in limited.output
-    assert "┘\n\nPage 1/2" in limited.output
-    assert "candidates\n\nInspect:" in limited.output
+    warning, table_and_rest = limited.output.split("\n\n", 1)
+    table, footer_and_actions = table_and_rest.split("\n\n", 1)
+    footer, actions = footer_and_actions.split("\n\n", 1)
+    assert "appear unused." in warning
+    assert "Possible Dead-Code Candidates" in table
+    assert "Page 1/2" in footer
+    assert actions.startswith("Inspect:")
     assert "\nNext:" in limited.output
 
     write_graph(
