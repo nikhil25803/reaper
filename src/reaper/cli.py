@@ -6,6 +6,7 @@ from typing import Annotated
 import typer
 
 from reaper import __version__
+from reaper.graph_cli import graph_app
 from reaper.utils.graphify import run_graphify_check, run_graphify_scan
 
 DESCRIPTION = "Reaper is a language-agnostic tool for dead code detection and analysis."
@@ -17,6 +18,7 @@ app = typer.Typer(
     name="reaper",
     no_args_is_help=False,
 )
+app.add_typer(graph_app, name="graph")
 
 
 def version_callback(value: bool) -> None:
