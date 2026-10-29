@@ -9,6 +9,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from reaper.utils.graph import load_graph
+
 
 def graphify_executable() -> str:
     """Return the Graphify executable or exit with installation guidance."""
@@ -77,7 +79,7 @@ def run_graphify_scan(scan_path: Path) -> None:
 
     graph_path = output_root / "graphify-out" / "graph.json"
     try:
-        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        nodes, edges = load_graph(graph_path)
     except FileNotFoundError as error:
         typer.echo("Graphify completed but graph.json was not created.", err=True)
         raise typer.Exit(1) from error
@@ -85,15 +87,9 @@ def run_graphify_scan(scan_path: Path) -> None:
         typer.echo(f"Unable to read Graphify output: {error}", err=True)
         raise typer.Exit(1) from error
 
-    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list):
+    except ValueError as error:
         typer.echo("Graphify produced an invalid graph.json.", err=True)
-        raise typer.Exit(1)
-
-    nodes = graph["nodes"]
-    edges = graph.get("links", graph.get("edges"))
-    if not isinstance(edges, list) or not all(isinstance(node, dict) for node in nodes):
-        typer.echo("Graphify produced an invalid graph.json.", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from error
 
     communities = {
         node["community"] for node in nodes if node.get("community") is not None

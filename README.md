@@ -30,6 +30,7 @@ code yet; interpreting those graphs and classifying findings comes later.
 | `--version`        | Show the installed version and exit.      |
 | `--check graphify` | Check whether Graphify is installed.      |
 | `--scan PATH`      | Generate a code-only graph for a project. |
+| `graph`            | Explore an existing generated graph.      |
 
 ## Graphify
 
@@ -59,6 +60,29 @@ files to `<project>/reaper-analysis/graphify-out`. Code-only mode skips
 documentation, PDFs, images, and other semantic inputs. Existing analysis files
 are updated by Graphify and are not deleted by Reaper. Successful scans print a
 compact table containing the node, edge, and community counts.
+
+## Explore the graph
+
+```console
+reaper graph candidates .
+```
+
+> Lists callable nodes with no incoming usage connections. These are review
+> candidates, not confirmed dead code: entry points, public APIs, decorators,
+> reflection, and framework hooks can appear unused.
+
+```console
+reaper graph candidates . --limit 10
+```
+
+> Limits the candidate table to ten results.
+
+```console
+reaper graph inspect . "main()"
+```
+
+> Shows a node's metadata and incoming and outgoing relationships. Use an exact
+> node ID when a label matches more than one node.
 
 ## Development
 
