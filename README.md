@@ -18,9 +18,10 @@
 
 ## About
 
-Reaper is an early-stage developer CLI that uses an externally installed
-Graphify executable to generate local code graphs. It does not identify dead
-code yet; interpreting those graphs and classifying findings comes later.
+Reaper is an early-stage developer CLI that uses Graphify to generate local
+code graphs. Source installations require Graphify separately; the Docker image
+includes it. Candidate findings are review hints rather than confirmed dead
+code.
 
 ## Available flags
 
@@ -34,7 +35,8 @@ code yet; interpreting those graphs and classifying findings comes later.
 
 ## Graphify
 
-Reaper does not bundle Graphify. Install its `graphify` command separately:
+Reaper's Python package does not bundle Graphify. Install its `graphify` command
+separately when running Reaper outside Docker:
 
 ```console
 uv tool install graphifyy
@@ -251,10 +253,38 @@ The same tasks are available through the convenience `Makefile`; run
 
 ## Docker
 
+The Docker image includes Graphify. Build it locally:
+
 ```console
 docker build -t reaper .
+```
+
+```console
 docker run --rm reaper --help
 ```
+
+Tagged releases are published for Linux AMD64 and ARM64:
+
+```console
+docker pull ghcr.io/nikhil25803/reaper:latest
+```
+
+```console
+docker run --rm ghcr.io/nikhil25803/reaper:latest --check graphify
+```
+
+Scan the current project while keeping generated files owned by your host user:
+
+```console
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --env HOME=/tmp \
+  --volume "$PWD:/workspace" \
+  ghcr.io/nikhil25803/reaper:latest --scan /workspace
+```
+
+The GHCR package may require authentication until its package visibility is
+changed to public.
 
 ## License
 
