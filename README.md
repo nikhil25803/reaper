@@ -18,10 +18,49 @@
 
 ## About
 
-Reaper is an early-stage developer CLI that uses Graphify to generate local
-code graphs. Source installations require Graphify separately; the Docker image
-includes it. Candidate findings are review hints rather than confirmed dead
-code.
+Reaper transforms complex codebases into navigable graphs. It is built to
+combine Graphify’s structural intelligence with local llama.cpp models for smart,
+private dead-code analysis—giving models focused evidence instead of making them
+spend tokens rediscovering the repository.
+
+> **What’s left:** Graphify integration is ready. llama.cpp integration and
+> Bash/PowerShell automation will complete the end-to-end workflow and generate
+> token-efficient system prompts for local models.
+
+## Quick Start
+
+Pull the published image:
+
+```console
+docker pull ghcr.io/nikhil25803/reaper:latest
+```
+
+> The GHCR image becomes available after the first tagged release and may
+> require authentication until the package is public. Until then, build it
+> locally from this repository:
+
+```console
+docker build -t reaper .
+```
+
+The commands below use the GHCR image. Replace its name with `reaper` when using
+the locally built image.
+
+```console
+docker run --rm ghcr.io/nikhil25803/reaper:latest --check graphify
+```
+
+> Confirms that the bundled Graphify executable is available.
+
+```console
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --env HOME=/tmp \
+  --volume "$PWD:/workspace" \
+  ghcr.io/nikhil25803/reaper:latest --scan /workspace
+```
+
+> Scans the current project and keeps generated files owned by your host user.
 
 ## Available flags
 
@@ -35,14 +74,8 @@ code.
 
 ## Graphify
 
-Reaper's Python package does not bundle Graphify. Install its `graphify` command
-separately when running Reaper outside Docker:
-
-```console
-uv tool install graphifyy
-```
-
-> Installs Graphify as an isolated uv tool.
+Graphify is bundled in Reaper's Docker image and generates the local code graph
+used by the exploration commands.
 
 ```console
 reaper --check graphify
@@ -195,20 +228,18 @@ List the first page:
 reaper graph candidates . --list --limit 10 --page 1
 ```
 
-> Candidate names and counts below are illustrative:
+> Candidate names and counts below are illustrative.
+
+> Review candidates only: entry points, public APIs, decorators, reflection,
+> and framework hooks can appear unused.
+
+| Node ID                                    | Symbol                   | Source                                        | Line | Outgoing |
+| ------------------------------------------ | ------------------------ | --------------------------------------------- | ---- | -------: |
+| `src_user_service_unused_legacy_handler`   | `unusedLegacyHandler()`  | `apps/user-service/src/legacy.ts`             | L42  |        0 |
+| `src_admin_service_stale_permission_check` | `stalePermissionCheck()` | `apps/admin-service/src/permissions.ts`       | L88  |        1 |
+| `src_billing_service_old_invoice_mapper`   | `oldInvoiceMapper()`     | `apps/billing-service/src/invoice/mapper.ts`  | L17  |        1 |
 
 ```text
-Review candidates only: entry points, public APIs, decorators, reflection, and framework hooks can appear unused.
-
-                         Possible Dead-Code Candidates
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┓
-┃ Node ID                                  ┃ Symbol                ┃ Source                                       ┃ Line ┃ Outgoing ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━┩
-│ src_user_service_unused_legacy_handler   │ unusedLegacyHandler() │ apps/user-service/src/legacy.ts              │ L42  │        0 │
-│ src_admin_service_stale_permission_check │ stalePermissionCheck()│ apps/admin-service/src/permissions.ts         │ L88  │        1 │
-│ src_billing_service_old_invoice_mapper   │ oldInvoiceMapper()    │ apps/billing-service/src/invoice/mapper.ts    │ L17  │        1 │
-└──────────────────────────────────────────┴───────────────────────┴──────────────────────────────────────────────┴──────┴──────────┘
-
 Page 1/20 · Showing 1-10 of 193 candidates
 
 Inspect: reaper graph inspect "." "src_user_service_unused_legacy_handler"
@@ -226,11 +257,20 @@ reaper graph inspect . src_user_service_unused_legacy_handler
 
 ## Development
 
+Source setup is intended for contributors. End-user installation currently uses
+Docker; PyPI publishing and direct `uv tool install reaper` support are planned.
+
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```console
 uv sync --locked
 ```
+
+```console
+uv tool install graphifyy
+```
+
+> Installs the external Graphify executable for source-based development.
 
 ```console
 uv run reaper --help
@@ -250,41 +290,6 @@ uv run ruff format --check .
 
 The same tasks are available through the convenience `Makefile`; run
 `make help` to list them.
-
-## Docker
-
-The Docker image includes Graphify. Build it locally:
-
-```console
-docker build -t reaper .
-```
-
-```console
-docker run --rm reaper --help
-```
-
-Tagged releases are published for Linux AMD64 and ARM64:
-
-```console
-docker pull ghcr.io/nikhil25803/reaper:latest
-```
-
-```console
-docker run --rm ghcr.io/nikhil25803/reaper:latest --check graphify
-```
-
-Scan the current project while keeping generated files owned by your host user:
-
-```console
-docker run --rm \
-  --user "$(id -u):$(id -g)" \
-  --env HOME=/tmp \
-  --volume "$PWD:/workspace" \
-  ghcr.io/nikhil25803/reaper:latest --scan /workspace
-```
-
-The GHCR package may require authentication until its package visibility is
-changed to public.
 
 ## License
 
