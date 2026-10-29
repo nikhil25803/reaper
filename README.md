@@ -64,25 +64,163 @@ compact table containing the node, edge, and community counts.
 ## Explore the graph
 
 ```console
+reaper graph projects .
+```
+
+> Discovers scan paths below the current directory that contain
+> `reaper-analysis/graphify-out/graph.json`. Copy a project path from this table
+> into the candidates or inspect command.
+
+```console
 reaper graph candidates .
 ```
 
-> Lists callable nodes with no incoming usage connections. These are review
-> candidates, not confirmed dead code: entry points, public APIs, decorators,
-> reflection, and framework hooks can appear unused.
+> Counts callable nodes with no incoming usage connections and prints the next
+> command for listing them.
 
 ```console
-reaper graph candidates . --limit 10
+reaper graph candidates . --list --limit 10 --page 1
 ```
 
-> Limits the candidate table to ten results.
+> Displays the first ten candidates with stable node IDs and pagination.
 
 ```console
-reaper graph inspect . "main()"
+reaper graph inspect . src_user_service_unused_legacy_handler
 ```
 
-> Shows a node's metadata and incoming and outgoing relationships. Use an exact
-> node ID when a label matches more than one node.
+> Shows the selected node's metadata and incoming and outgoing relationships.
+
+`PROJECT_PATH` in command help is a directory placeholder, not the literal word
+`project`. When working in the scanned directory, it can be omitted:
+
+```console
+reaper graph candidates --list
+```
+
+Candidates are not confirmed dead code: entry points, public APIs, decorators,
+reflection, and framework hooks can appear unused.
+
+## Monorepo example
+
+Consider an illustrative service monorepo:
+
+```text
+demo-monorepo/
+├── Makefile
+├── README.md
+├── apps/
+│   ├── api-gateway/
+│   ├── user-service/
+│   ├── admin-service/
+│   ├── billing-service/
+│   ├── notification-service/
+│   └── reporting-service/
+├── packages/
+│   ├── database/
+│   ├── shared/
+│   ├── observability/
+│   └── config/
+├── docs/
+│   ├── architecture.md
+│   └── adr/
+├── scripts/
+│   ├── create-service.sh
+│   └── init-database.sql
+├── docker-compose.yml
+├── package.json
+├── pnpm-lock.yaml
+├── pnpm-workspace.yaml
+└── turbo.json
+```
+
+First, scan the monorepo root:
+
+```console
+reaper --scan .
+```
+
+> Generates `./reaper-analysis/graphify-out/graph.json` and prints a compact
+> summary. Example counts are illustrative:
+
+```text
+ Reaper <> Graphify Scan Complete
+┏━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Metric      ┃ Count ┃
+┡━━━━━━━━━━━━━╇━━━━━━━┩
+│ Nodes       │ 1,284 │
+│ Edges       │ 2,047 │
+│ Communities │    34 │
+└─────────────┴───────┘
+```
+
+List the scan paths Reaper can analyze:
+
+```console
+reaper graph projects .
+```
+
+> A root scan produces one entry. Services scanned independently appear as
+> additional projects. Example output:
+
+```text
+                         Analyzed Projects
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Project       ┃ Project path                                        ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ demo-monorepo │ /workspace/demo-monorepo                            │
+│ user-service  │ /workspace/demo-monorepo/apps/user-service          │
+│ admin-service │ /workspace/demo-monorepo/apps/admin-service         │
+└───────────────┴─────────────────────────────────────────────────────┘
+Found 3 analyzed project(s).
+```
+
+Next, count possible candidates:
+
+```console
+reaper graph candidates .
+```
+
+> Reports the total and suggests the detailed listing command:
+
+```text
+Found 193 possible dead-code candidates.
+Next: reaper graph candidates "." --list --limit 10 --page 1
+```
+
+List the first page:
+
+```console
+reaper graph candidates . --list --limit 10 --page 1
+```
+
+> Candidate names and counts below are illustrative:
+
+```text
+Review candidates only: entry points, public APIs, decorators, reflection, and framework hooks can appear unused.
+
+                         Possible Dead-Code Candidates
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┓
+┃ Node ID                                  ┃ Symbol                ┃ Source                                       ┃ Line ┃ Outgoing ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━┩
+│ src_user_service_unused_legacy_handler   │ unusedLegacyHandler() │ apps/user-service/src/legacy.ts              │ L42  │        0 │
+│ src_admin_service_stale_permission_check │ stalePermissionCheck()│ apps/admin-service/src/permissions.ts         │ L88  │        1 │
+│ src_billing_service_old_invoice_mapper   │ oldInvoiceMapper()    │ apps/billing-service/src/invoice/mapper.ts    │ L17  │        1 │
+└──────────────────────────────────────────┴───────────────────────┴──────────────────────────────────────────────┴──────┴──────────┘
+
+Page 1/20 · Showing 1-10 of 193 candidates
+
+Inspect: reaper graph inspect "." "src_user_service_unused_legacy_handler"
+Next: reaper graph candidates "." --list --limit 10 --page 2
+```
+
+Finally, inspect a candidate by its stable node ID:
+
+```console
+reaper graph inspect . src_user_service_unused_legacy_handler
+```
+
+> Displays its source metadata and graph relationships before a human decides
+> whether the code is actually unused.
 
 ## Development
 

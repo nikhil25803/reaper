@@ -1,15 +1,40 @@
 """Graph loading and analysis helpers."""
 
 import json
+import os
 from pathlib import Path, PurePosixPath
 
 IGNORED_USAGE_RELATIONS = {"contains", "rationale_for"}
 TEST_DIRECTORIES = {"test", "tests", "__tests__"}
+DISCOVERY_EXCLUDES = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "reaper-analysis",
+}
 
 
 def graph_path(project: Path) -> Path:
     """Return the generated graph path for a project."""
     return project / "reaper-analysis" / "graphify-out" / "graph.json"
+
+
+def analyzed_projects(root: Path) -> list[Path]:
+    """Find scan paths containing a generated Reaper graph."""
+    projects: list[Path] = []
+    for current, directories, _ in os.walk(root):
+        project = Path(current)
+        if graph_path(project).is_file():
+            projects.append(project.resolve())
+        directories[:] = [
+            directory
+            for directory in directories
+            if directory not in DISCOVERY_EXCLUDES
+        ]
+    return sorted(projects, key=lambda project: project.as_posix())
 
 
 def load_graph(path: Path) -> tuple[list[dict], list[dict]]:
@@ -53,9 +78,7 @@ def usage_edges(edges: list[dict]) -> list[dict]:
     ]
 
 
-def candidate_nodes(
-    nodes: list[dict], edges: list[dict], limit: int
-) -> list[tuple[dict, int]]:
+def candidate_nodes(nodes: list[dict], edges: list[dict]) -> list[tuple[dict, int]]:
     """Return local callable nodes with no incoming usage edges."""
     relevant_edges = usage_edges(edges)
     incoming = {edge.get("target") for edge in relevant_edges}
@@ -71,6 +94,7 @@ def candidate_nodes(
         and node.get("_callable") is True
         and node.get("file_type") == "code"
         and node.get("external") is not True
+        and isinstance(node.get("id"), str)
         and isinstance(node.get("source_file"), str)
         and not is_test_source(node["source_file"])
         and node.get("id") not in incoming
@@ -82,7 +106,7 @@ def candidate_nodes(
             _line_number(item[0].get("source_location")),
         )
     )
-    return candidates[:limit]
+    return candidates
 
 
 def matching_nodes(nodes: list[dict], query: str) -> list[dict]:

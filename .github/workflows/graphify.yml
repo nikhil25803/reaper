@@ -53,4 +53,6 @@ jobs:
           assert isinstance(graph['links'], list)"
 
       - name: Find candidate nodes
-        run: uv run --no-sync reaper graph candidates . --limit 5
+        run: |
+          uv run --no-sync reaper graph projects .
+          uv run --no-sync reaper graph candidates --list --limit 5 --page 1
