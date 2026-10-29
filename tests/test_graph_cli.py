@@ -1,5 +1,6 @@
 import json
 
+from rich.text import Text
 from typer.testing import CliRunner
 
 from reaper.cli import app
@@ -224,7 +225,7 @@ def test_candidates_reject_invalid_pagination(tmp_path) -> None:
     assert out_of_range.exit_code == 2
     assert "valid pages are 1-1" in out_of_range.output
     assert without_list.exit_code == 2
-    assert "--page requires --list" in without_list.output
+    assert "--page requires --list" in Text.from_ansi(without_list.output).plain
     assert invalid_limit.exit_code == 2
 
 
