@@ -19,6 +19,7 @@ htmlcov/
 # Builds
 build/
 dist/
+reaper-analysis/
 
 # Editors and operating systems
 .idea/

@@ -22,7 +22,10 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Quality Assurance",
 ]
-dependencies = ["typer>=0.16,<1"]
+dependencies = [
+  "rich>=13.8,<16",
+  "typer>=0.16,<1",
+]
 
 [project.scripts]
 reaper = "reaper.main:main"

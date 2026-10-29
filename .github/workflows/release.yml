@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test-image:
+    name: Test image (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: reaper-release-test:${{ matrix.arch }}
+
+      - name: Validate release tag and tools
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          expected_version="${GITHUB_REF_NAME#v}"
+          actual_version="$(docker run --rm --platform "${{ matrix.platform }}" reaper-release-test:${{ matrix.arch }} --version)"
+          test "$actual_version" = "$expected_version"
+          docker run --rm --platform "${{ matrix.platform }}" reaper-release-test:${{ matrix.arch }} --help
+          docker run --rm --platform "${{ matrix.platform }}" reaper-release-test:${{ matrix.arch }} --check graphify
+
+      - name: Test graph scan
+        run: |
+          docker run --rm \
+            --platform "${{ matrix.platform }}" \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            reaper-release-test:${{ matrix.arch }} --scan /workspace
+          python3 -c "import json; from pathlib import Path; graph = json.loads(Path('reaper-analysis/graphify-out/graph.json').read_text()); assert graph['nodes']; assert isinstance(graph.get('links'), list)"
+
+  publish-image:
+    name: Publish image
+    needs: test-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
