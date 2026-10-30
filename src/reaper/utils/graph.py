@@ -78,35 +78,51 @@ def usage_edges(edges: list[dict]) -> list[dict]:
     ]
 
 
-def candidate_nodes(nodes: list[dict], edges: list[dict]) -> list[tuple[dict, int]]:
-    """Return local callable nodes with no incoming usage edges."""
+def analysis_candidates(
+    nodes: list[dict],
+    edges: list[dict],
+    max_connections: int | None = None,
+) -> list[tuple[dict, int, int]]:
+    """Return local callable nodes ranked for model-assisted analysis."""
     relevant_edges = usage_edges(edges)
-    incoming = {edge.get("target") for edge in relevant_edges}
+    incoming: dict[object, int] = {}
     outgoing: dict[object, int] = {}
     for edge in relevant_edges:
         source = edge.get("source")
+        target = edge.get("target")
         outgoing[source] = outgoing.get(source, 0) + 1
+        incoming[target] = incoming.get(target, 0) + 1
 
-    candidates = [
-        (node, outgoing.get(node.get("id"), 0))
-        for node in nodes
-        if node.get("_origin") == "ast"
-        and node.get("_callable") is True
-        and node.get("file_type") == "code"
-        and node.get("external") is not True
-        and isinstance(node.get("id"), str)
-        and isinstance(node.get("source_file"), str)
-        and not is_test_source(node["source_file"])
-        and node.get("id") not in incoming
-    ]
+    candidates: list[tuple[dict, int, int]] = []
+    for node in nodes:
+        if not _is_local_callable(node):
+            continue
+        node_id = node["id"]
+        incoming_count = incoming.get(node_id, 0)
+        outgoing_count = outgoing.get(node_id, 0)
+        if (
+            max_connections is None
+            or incoming_count + outgoing_count <= max_connections
+        ):
+            candidates.append((node, incoming_count, outgoing_count))
+
     candidates.sort(
         key=lambda item: (
-            item[1],
+            item[1] + item[2],
             item[0]["source_file"],
             _line_number(item[0].get("source_location")),
         )
     )
     return candidates
+
+
+def candidate_nodes(nodes: list[dict], edges: list[dict]) -> list[tuple[dict, int]]:
+    """Return local callable nodes with no incoming usage edges."""
+    return [
+        (node, outgoing)
+        for node, incoming, outgoing in analysis_candidates(nodes, edges)
+        if incoming == 0
+    ]
 
 
 def matching_nodes(nodes: list[dict], query: str) -> list[dict]:
@@ -133,3 +149,16 @@ def _line_number(location: object) -> int:
         return int(str(location).removeprefix("L").split("-", 1)[0])
     except ValueError:
         return 0
+
+
+def _is_local_callable(node: dict) -> bool:
+    """Return whether a node can be reviewed as local callable code."""
+    return (
+        node.get("_origin") == "ast"
+        and node.get("_callable") is True
+        and node.get("file_type") == "code"
+        and node.get("external") is not True
+        and isinstance(node.get("id"), str)
+        and isinstance(node.get("source_file"), str)
+        and not is_test_source(node["source_file"])
+    )
