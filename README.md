@@ -351,6 +351,7 @@ The same tasks are available through the convenience `Makefile`; run
 
 The on-demand `Llama` GitHub Actions workflow runs the real Qwen integration,
 prints the Markdown report in the job summary, and uploads both report formats.
+Run it from the Actions tab or add the `llama-analysis` label to a pull request.
 
 ## License
 
