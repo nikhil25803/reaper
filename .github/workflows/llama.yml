@@ -9,7 +9,7 @@ permissions:
 jobs:
   analysis-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -45,7 +45,9 @@ jobs:
             ghcr.io/ggml-org/llama.cpp:server \
             --model /models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
             --host 0.0.0.0 \
-            --port 8080
+            --port 8080 \
+            --ctx-size 16384 \
+            --parallel 1
           for _ in {1..60}; do
             if curl --fail --silent http://127.0.0.1:8080/health; then
               exit 0
@@ -56,7 +58,34 @@ jobs:
           exit 1
 
       - name: Analyze ranked callables
-        run: uv run --no-sync reaper analyze . --limit 100
+        run: uv run --no-sync reaper analyze . --all
+
+      - name: Validate reports
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from reaper.utils.graph import analysis_candidates, load_graph
+
+          graph_path = Path("reaper-analysis/graphify-out/graph.json")
+          report_path = Path("reaper-analysis/reaper-report.json")
+          markdown_path = Path("reaper-analysis/reaper-report.md")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          nodes, edges = load_graph(graph_path)
+          findings = report["findings"]
+          summary = report["summary"]
+
+          assert report["schema_version"] == 1
+          assert findings
+          assert summary["reviewed"] == len(findings)
+          assert summary["reviewed"] == len(analysis_candidates(nodes, edges))
+          assert summary["reviewed"] == sum(
+              summary[key]
+              for key in ("likely_dead", "needs_review", "likely_used")
+          )
+          assert markdown_path.read_text(encoding="utf-8").strip()
+          PY
 
       - name: Publish report summary
         run: |
@@ -74,4 +103,8 @@ jobs:
 
       - name: Show llama.cpp logs on failure
         if: failure()
-        run: docker logs reaper-llama
+        run: docker logs reaper-llama || true
+
+      - name: Stop llama.cpp server
+        if: always()
+        run: docker rm --force reaper-llama || true
