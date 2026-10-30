@@ -23,9 +23,8 @@ combine Graphify’s structural intelligence with local llama.cpp models for sma
 private dead-code analysis—giving models focused evidence instead of making them
 spend tokens rediscovering the repository.
 
-> **What’s left:** Graphify integration is ready. llama.cpp integration and
-> Bash/PowerShell automation will complete the end-to-end workflow and generate
-> token-efficient system prompts for local models.
+> **What’s left:** Bash/PowerShell automation and reusable system-prompt
+> generation will complete the end-to-end workflow for other AI models.
 
 ## Quick Start
 
@@ -70,6 +69,7 @@ docker run --rm \
 | `--version`        | Show the installed version and exit.      |
 | `--check graphify` | Check whether Graphify is installed.      |
 | `--scan PATH`      | Generate a code-only graph for a project. |
+| `analyze`          | Review graph candidates with llama.cpp.   |
 | `graph`            | Explore an existing generated graph.      |
 
 ## Graphify
@@ -134,6 +134,64 @@ reaper graph candidates --list
 
 Candidates are not confirmed dead code: entry points, public APIs, decorators,
 reflection, and framework hooks can appear unused.
+
+## Model-assisted analysis
+
+Reaper connects to an external `llama-server`; it does not bundle or download a
+model. Start the official server image with your own GGUF model:
+
+```console
+docker run --rm \
+  --publish 8080:8080 \
+  --volume "$PWD/models:/models" \
+  ghcr.io/ggml-org/llama.cpp:server \
+  --model /models/model.gguf \
+  --host 0.0.0.0 \
+  --port 8080
+```
+
+> Replace `models/model.gguf` with the path to an instruction-tuned GGUF model.
+
+With Reaper installed from source, analyze the current graph directly:
+
+```console
+reaper analyze .
+```
+
+> Reviews the first 20 local callables, ranked from least to most connected. Use
+> `--scan` to refresh the graph first, `--limit` to choose a review count,
+> `--all` to review the complete ranked pool, or `--low-connectivity 2` to limit
+> the pool to nodes with at most two total usage connections.
+
+When Reaper runs in Docker, connect it to the llama.cpp port published on the
+host and mount the project so reports are written back locally:
+
+```console
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --env HOME=/tmp \
+  --volume "$PWD:/workspace" \
+  ghcr.io/nikhil25803/reaper:latest \
+  analyze /workspace --server http://host.docker.internal:8080
+```
+
+On Linux, insert this option before the image name in the Reaper container
+command:
+
+```console
+--add-host host.docker.internal:host-gateway
+```
+
+Successful analysis updates two frontend-ready files:
+
+- `reaper-analysis/reaper-report.json` contains the versioned machine-readable
+  contract.
+- `reaper-analysis/reaper-report.md` contains the human-readable evidence and
+  model verdicts.
+
+The terminal displays likely-dead and needs-review findings. Likely-used results
+remain available in both reports. Model verdicts are review evidence only;
+Reaper never edits or removes code.
 
 ## Monorepo example
 
@@ -290,6 +348,9 @@ uv run ruff format --check .
 
 The same tasks are available through the convenience `Makefile`; run
 `make help` to list them.
+
+The on-demand `Llama` GitHub Actions workflow runs the real Qwen integration,
+prints the Markdown report in the job summary, and uploads both report formats.
 
 ## License
 

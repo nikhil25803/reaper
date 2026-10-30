@@ -26,3 +26,4 @@ reaper-analysis/
 .vscode/
 .DS_Store
 *.swp
+models/
